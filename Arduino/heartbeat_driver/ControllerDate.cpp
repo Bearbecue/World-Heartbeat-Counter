@@ -33,6 +33,9 @@ DateController::DateController()
 void  DateController::Setup()
 {
   // Setup rotary encoder
+  pinMode(DATE_ROTENC_PIN_A, INPUT_PULLUP);
+  pinMode(DATE_ROTENC_PIN_B, INPUT);
+
   prevCLK = digitalRead(DATE_ROTENC_PIN_A);
   attachInterrupt(digitalPinToInterrupt(DATE_ROTENC_PIN_A), updateRotaryEncoder, RISING);
 }
@@ -90,3 +93,35 @@ bool DateController::Update()
 }
 
 //----------------------------------------------------------------------------
+
+void  _DateDisplay(LedControl &segDisp, int dispOffset, int32_t value)
+{
+  int kMaxDigits = 7;
+
+  bool  negative = value < 0;
+  if (negative)
+    value = -value;
+
+  int digitID = 0;
+  while (value != 0 && digitID < kMaxDigits - 1)
+  {
+    byte  digit = value % 10;
+    value /= 10;
+    segDisp.setDigit(dispOffset, digitID++, digit, false);
+  }
+
+  if (negative)
+    segDisp.setRawChar(dispOffset * 8 + digitID++, '-', false);
+  else if (digitID == 0)
+    segDisp.setRawDigit(dispOffset * 8 + digitID++, 0, false);
+
+  for (int i = digitID; i < kMaxDigits; i++)
+    segDisp.setRawChar(dispOffset * 8 + i, ' ', false);
+}
+
+//----------------------------------------------------------------------------
+
+void  DateController::Print(LedControl &segDisp, int offset) const
+{
+  _DateDisplay(segDisp, offset, m_CurrentYear);
+}

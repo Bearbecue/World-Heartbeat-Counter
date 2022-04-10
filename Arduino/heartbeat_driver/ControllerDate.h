@@ -1,5 +1,7 @@
+#pragma once
 
 #include "Helpers.h"
+#include "7SegDriver.h"
 
 //----------------------------------------------------------------------------
 
@@ -15,6 +17,8 @@ public:
 
   // Date accessors
   int32_t Year() const { return m_CurrentYear; }
+
+  void  Print(LedControl &segDisp, int offset) const;
 
 private:
   int32_t m_CurrentYear;

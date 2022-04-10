@@ -1,6 +1,6 @@
 //----------------------------------------------------------------------------
 
-#include "PopulationTable.h"
+#include "ControllerPopulation.h"
 #include <avr/pgmspace.h>
 
 //----------------------------------------------------------------------------
@@ -16,15 +16,18 @@ struct  SPopulationRecord
 static const SPopulationRecord	kPopulationRecord[] PROGMEM =
 {
   // Estimation of initial homo-sapiens fork :D
+  // TODO: This should actually dip
   { -100000,         1ULL },  // Birth of initial mutant with the homo sapiens seed
   { -100000+14,      1ULL },  // started banging between 14 & 15 and spread the genes !
   { -100000+15,      2ULL },
   { -100000+16,      3ULL },
   { -100000+18,      3ULL },
   { -100000+19,      5ULL },  // Died at 19 eaten by a mountain lion or something
+  { -100000+23,      4ULL },  // Another offspring died squished by a mammoth
   { -100000+14+15,   5ULL },  // First offspring started banging at 15
   { -100000+14+16,  10ULL },  // banged quite a lot.
   { -100000+14+23,  24ULL },  // Shit is getting out of hand
+  { -100000+14+24,  21ULL },
   { -99900,        169ULL },  // Crap
   { -99800,        542ULL },  // Who wouldve thought the earth will get fucked 100 000 years down the line?
   { -99600,       5673ULL },
@@ -312,6 +315,7 @@ static const SPopulationRecord	kPopulationRecord[] PROGMEM =
 };
 const int kPopulationRecordSize = sizeof(kPopulationRecord) / sizeof(kPopulationRecord[0]);
 
+
 //----------------------------------------------------------------------------
 
 uint64_t  _pgm_read_qword_near(void *ptr)
@@ -323,7 +327,7 @@ uint64_t  _pgm_read_qword_near(void *ptr)
 
 //----------------------------------------------------------------------------
 
-int64_t GetPopulationAtDate(int32_t date)
+int64_t _GetPopulationAtDate(int32_t date)
 {
   for (int i = 0; i < kPopulationRecordSize; i++)
   {
@@ -350,6 +354,52 @@ int64_t GetPopulationAtDate(int32_t date)
 
 //----------------------------------------------------------------------------
 
-void    SetupPopulationControls()
+PopulationController::PopulationController()
+: m_Population(0)
 {
 }
+
+//----------------------------------------------------------------------------
+
+void  PopulationController::Setup()
+{
+}
+
+//----------------------------------------------------------------------------
+
+void  PopulationController::SetYear(int32_t year)
+{
+  m_Population = _GetPopulationAtDate(year);
+}
+
+//----------------------------------------------------------------------------
+
+void  _PopulationDisplay(LedControl &segDisp, int dispOffset, int64_t value)
+{
+  int kMaxDigits = 12;
+  int digitID = 0;
+  bool  dot = false;
+  while (value != 0 && digitID < kMaxDigits)
+  {
+    byte  digit = value % 10;
+    value /= 10;
+    int   did = digitID++;
+    segDisp.setDigit(dispOffset + (did / 8), did % 8, digit, dot);
+    dot = ((did + 1) % 3) == 0;
+  }
+
+  if (digitID == 0)
+    segDisp.setRawDigit(dispOffset * 8 + digitID++, 0, false);
+
+  for (int i = digitID; i < kMaxDigits; i++)
+    segDisp.setRawChar((dispOffset + (i / 8)) * 8 + (i % 8), ' ', false);
+}
+
+//----------------------------------------------------------------------------
+
+void  PopulationController::Print(LedControl &segDisp, int offset)
+{
+  _PopulationDisplay(segDisp, offset, m_Population);
+}
+
+//----------------------------------------------------------------------------

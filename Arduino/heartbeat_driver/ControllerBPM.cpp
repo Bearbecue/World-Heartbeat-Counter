@@ -38,8 +38,19 @@ const int   kPointCount = sizeof(kBPMPoints) / sizeof(kBPMPoints[0]);
 
 //----------------------------------------------------------------------------
 
-void  ResetBPMControls()
+BPMController::BPMController()
 {
+}
+
+//----------------------------------------------------------------------------
+
+void  BPMController::Setup()
+{
+  // Setup pot pins as input
+  for (int i = 0; i < 4; i++)
+    pinMode(PIN_IN_BPM(i), INPUT);
+
+  // Read pot values & setup initial histogram
   bpmRatioHistoryIndex = 0;
   for (int i = 0; i < 4; i++)
   {
@@ -49,13 +60,14 @@ void  ResetBPMControls()
     bpmRatios[i] = rawValue;
   }
 
+  // Update BPM curve control-points
   for (int i = 0; i < 4; i++)
     kBPMPoints[1 + i].y = clamp(int(bpmRatios[i]) * BPM_RATIO_QUANTIZER, 0, kBPMScaleMax);
 }
 
 //----------------------------------------------------------------------------
 
-void  ReadBPMControls()
+bool  BPMController::Update()
 {
   for (int i = 0; i < 4; i++)
   {
@@ -84,18 +96,7 @@ void  ReadBPMControls()
   for (int i = 0; i < 4; i++)
     kBPMPoints[1 + i].y = clamp(int(bpmRatios[i]) * BPM_RATIO_QUANTIZER, 0, kBPMScaleMax);
 
-  if (dirty)
-  {
-    _DrawBPMCurve(displayRails[kDispRail_Curve]);
-
-    Serial.print((bpmRatios[0]));
-    Serial.print(", ");
-    Serial.print((bpmRatios[1]));
-    Serial.print(", ");
-    Serial.print((bpmRatios[2]));
-    Serial.print(", ");
-    Serial.println((bpmRatios[3]));
-  }
+  return dirty;
 }
 
 //----------------------------------------------------------------------------
@@ -126,14 +127,13 @@ float _InterpolateBPMCP(const struct SVec2I &p0, const struct SVec2I &p1, float 
 
 //----------------------------------------------------------------------------
 
-void  _DrawBPMCurve(LedControl &segDisp)
+void  BPMController::DrawCurve(LedControl &segDisp)
 {
   int bpmStart = kBPMPoints[0].x;
   int bpmEnd = kBPMPoints[kPointCount-1].x;
 
   const SVec2I  kPreStartPoint(bpmStart - 20, 0);
   const SVec2I  kPostEndPoint(bpmEnd + 20, 0);
-  const float scaleX = kDimX / float(bpmEnd - bpmStart);
   int curCPId = 0;
   int curCPX = kBPMPoints[curCPId].x;
   int nextCPX = kBPMPoints[curCPId+1].x;
@@ -142,8 +142,8 @@ void  _DrawBPMCurve(LedControl &segDisp)
 
   for (int x = 0; x < kDimX; x++)
   {
-    const int bpm = bpmStart + x * (bpmEnd - bpmStart) / kDimX;
-    if (bpm > nextCPX)
+    const int bpm = COMPUTE_BPM_FROM_SAMPLING_INDEX(x, kDimX, bpmStart, bpmEnd);
+    while (bpm > nextCPX)
     {
       curCPId++;
       if (curCPId >= kPointCount-1)
@@ -153,13 +153,13 @@ void  _DrawBPMCurve(LedControl &segDisp)
     }
     const float t = (bpm - curCPX) / float(nextCPX - curCPX);
 #if 1
-    const int yCur = int(_InterpolateBPMCP( curCPId > 0 ? kBPMPoints[curCPId - 1] : kPreStartPoint,
+    const int yCur = clamp(int(_InterpolateBPMCP( curCPId > 0 ? kBPMPoints[curCPId - 1] : kPreStartPoint,
                                             kBPMPoints[curCPId],
                                             kBPMPoints[curCPId + 1],
                                             curCPId + 2 < kPointCount ? kBPMPoints[curCPId + 2] : kPostEndPoint,
-                                            t) * kDimY * kBPMNormalizer);
+                                            t) * kDimY * kBPMNormalizer), 0, kDimY-1);
 #else
-    const int yCur = int(_InterpolateBPMCP(kBPMPoints[curCPId], kBPMPoints[curCPId + 1], t) * kDimY * kBPMNormalizer);
+    const int yCur = clamp(int(_InterpolateBPMCP(kBPMPoints[curCPId], kBPMPoints[curCPId + 1], t) * kDimY * kBPMNormalizer), 0, kDimY-1);
 #endif
 
     // Draw line between 'yPrev' and 'yCur'
@@ -193,6 +193,48 @@ void  _DrawBPMCurve(LedControl &segDisp)
   segDisp.flushDeviceState();
 }
 
+//----------------------------------------------------------------------------
 
+float  BPMController::Sample(float *dst, int sampleCount)
+{
+  int bpmStart = kBPMPoints[0].x;
+  int bpmEnd = kBPMPoints[kPointCount-1].x;
+
+  const SVec2I  kPreStartPoint(bpmStart - 20, 0);
+  const SVec2I  kPostEndPoint(bpmEnd + 20, 0);
+  int curCPId = 0;
+  int curCPX = kBPMPoints[curCPId].x;
+  int nextCPX = kBPMPoints[curCPId+1].x;
+  int yPrev = 0;
+  const float kBPMNormalizer = 1.0f / kBPMScaleMax;
+
+  float  sum = 0;
+  for (int x = 0; x < sampleCount; x++)
+  {
+    const int bpm = COMPUTE_BPM_FROM_SAMPLING_INDEX(x, sampleCount, bpmStart, bpmEnd);
+    while (bpm > nextCPX)
+    {
+      curCPId++;
+      if (curCPId >= kPointCount-1)
+        break;
+      curCPX = nextCPX;
+      nextCPX = kBPMPoints[curCPId+1].x;
+    }
+    const float t = (bpm - curCPX) / float(nextCPX - curCPX);
+#if 1
+    const float yCur = clamp(_InterpolateBPMCP( curCPId > 0 ? kBPMPoints[curCPId - 1] : kPreStartPoint,
+                                            kBPMPoints[curCPId],
+                                            kBPMPoints[curCPId + 1],
+                                            curCPId + 2 < kPointCount ? kBPMPoints[curCPId + 2] : kPostEndPoint,
+                                            t) * kBPMNormalizer, 0.0f, 1.0f);
+#else
+    const int yCur = clamp(_InterpolateBPMCP(kBPMPoints[curCPId], kBPMPoints[curCPId + 1], t) * kBPMNormalizer, 0.0f, 1.0f);
+#endif
+    dst[x] = yCur;
+
+    sum += yCur;
+  }
+  return sum;
+}
 
 //----------------------------------------------------------------------------

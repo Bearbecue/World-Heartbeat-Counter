@@ -1,3 +1,4 @@
+#pragma once
 /*
  *    LedControl.h - A library for controling Leds with a MAX7219/MAX7221
  *    Copyright (c) 2007 Eberhard Fahle

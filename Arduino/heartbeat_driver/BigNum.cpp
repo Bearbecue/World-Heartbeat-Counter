@@ -13,20 +13,20 @@ void  SBigNum::operator += (uint64_t x)
   if (x >= hbc_0_max)  // invalid
     return;
 
-  uint64_t  left = hbc_0_max - hbc_0;
+  uint64_t  left = hbc_0_max - m_HBC0;
   while (x != 0)
   {
     if (left > x)
     {
-      hbc_0 += x;
+      m_HBC0 += x;
       break;
     }
 
     x -= left;
-    hbc_0 = 0;
-    hbc_1 += 1;
+    m_HBC0 = 0;
+    m_HBC1 += 1;
 
-    left = hbc_0 - hbc_0_max;
+    left = m_HBC0 - hbc_0_max;
   }
 }
 
@@ -34,8 +34,8 @@ void  SBigNum::operator += (uint64_t x)
 
 void SBigNum::PrintToSerial() const
 {
-  uint64_t  hbc_0 = hbc_0;
-  uint32_t  hbc_1 = hbc_1;
+  uint64_t  hbc_0 = m_HBC0;
+  uint32_t  hbc_1 = m_HBC1;
 
   char  digits[hbc_0_maxDigitCount + hbc_1_maxDigitCount + 1]; // max number of digits in both nums + null terminating character
   int   digitCount = 0;
@@ -56,6 +56,9 @@ void SBigNum::PrintToSerial() const
     }
   }
 
+  if (digitCount == 0)
+    digits[digitCount++] = '0';
+
   // flip string
   for (int i = 0, e = digitCount / 2; i < e; i++)
   {
@@ -72,8 +75,8 @@ void SBigNum::PrintToSerial() const
 
 void SBigNum::PrintTo7Seg(LedControl &segDisp, int offset) const
 {
-  uint64_t  hbc_0 = hbc_0;
-  uint32_t  hbc_1 = hbc_1;
+  uint64_t  hbc_0 = m_HBC0;
+  uint32_t  hbc_1 = m_HBC1;
 
   const int kMaxValueDigits = 20;//hbc_0_maxDigitCount + hbc_1_maxDigitCount;
   byte  digits[hbc_0_maxDigitCount + hbc_1_maxDigitCount]; // max number of digits in both nums + null terminating character
@@ -94,6 +97,9 @@ void SBigNum::PrintTo7Seg(LedControl &segDisp, int offset) const
       hbc_1 /= 10;
     }
   }
+
+  if (digitCount == 0)
+    digits[digitCount++] = 0;
 
   bool  dot = false;
   for (int i = 0; i < digitCount; i++)

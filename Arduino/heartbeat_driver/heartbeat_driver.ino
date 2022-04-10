@@ -10,10 +10,10 @@
 #include "HWPinConfig.h"
 #include "Helpers.h"
 #include "7SegDriver.h"
-#include "PopulationTable.h"
 #include "ControllerBPM.h"
 #include "ControllerDate.h"
-#include "BigNum.h"
+#include "ControllerPopulation.h"
+#include "ControllerHeartbeat.h"
 
 //----------------------------------------------------------------------------
 // NOTE !!! We should be able to use the same MOSI & CLK pins between all rails,
@@ -50,28 +50,17 @@ const int   kChipCount_Curve = 8;
 
 //----------------------------------------------------------------------------
 
-unsigned long   prevFrameMs = 0;
-unsigned long   cur_time = 0;
+unsigned long         prevFrameMs = 0;
 
-DateController  currentDate;
-
-uint64_t        popcount = 0;
-
-SBigNum         hbCount;
+DateController        currentDate;
+BPMController         bpm;
+PopulationController  population;
+HeartbeatController   heartbeats;
 
 //----------------------------------------------------------------------------
 
 void setup()
 {
-#if 1
-//  pinMode(A0, INPUT);
-  pinMode(DATE_ROTENC_PIN_A, INPUT_PULLUP);
-  pinMode(DATE_ROTENC_PIN_B, INPUT);
-#endif
-
-  for (int i = 0; i < 4; i++)
-    pinMode(PIN_IN_BPM(i), INPUT);
-
   // Clear displays
   for (int r = 0; r < kDispRailCount; r++)
   {
@@ -79,16 +68,12 @@ void setup()
     for (int i = 0; i < segDisp.getDeviceCount(); i++)
     {
       segDisp.clearDisplay(i);
-      segDisp.setIntensity(i, 0);
       segDisp.shutdown(i, false);
+      segDisp.setIntensity(i, 0);
     }
   }
 
-  SetupBPMControls();
-  currentDate.Setup();
-  SetupPopulationControls();
-
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   prevFrameMs = millis();
 
@@ -97,188 +82,54 @@ void setup()
   setIntensity_Date(1.0f);
   setIntensity_Curve(0.3f);
 
-  ResetBPMControls();
+  bpm.Setup();
+  heartbeats.Setup(&bpm);
+  currentDate.Setup();
+  population.Setup();
+  
+  population.SetYear(currentDate.Year());
+  heartbeats.SetPopulation(population.Population());
 
-  popcount = GetPopulationAtDate(currentDate.Year());
+  population.Print(displayRails[kDispRail_Population], kDispOffset_Population);
+  currentDate.Print(displayRails[kDispRail_Date], kDispOffset_Date);
 
-  _PopulationDisplay(popcount);
-  _DateDisplay(currentDate.Year());
-
-  _DrawBPMCurve(displayRails[kDispRail_Curve]);
-}
-
-//----------------------------------------------------------------------------
-
-void  _SetIntensity_Impl(float intensity, int railId, int chipOffset, int chipCount)
-{
-  const int hwIntensity = clamp(int(intensity * 15), 0, 15);
-
-  LedControl  &segDisp = displayRails[railId];
-  for (int i = chipOffset; i < chipCount; i++)
-    segDisp.setIntensity(i, hwIntensity);
-
-  for (int i = chipOffset; i < chipCount; i++)
-    segDisp.shutdown(i, false);
-}
-
-//----------------------------------------------------------------------------
-
-void  setIntensity_Counter(float intensity) { _SetIntensity_Impl(intensity, kDispRail_Main, kDispOffset_Main, kChipCount_Main); }
-void  setIntensity_Population(float intensity) { _SetIntensity_Impl(intensity, kDispRail_Population, kDispOffset_Population, kChipCount_Population); }
-void  setIntensity_Date(float intensity) { _SetIntensity_Impl(intensity, kDispRail_Date, kDispOffset_Date, kChipCount_Date); }
-void  setIntensity_Curve(float intensity) { _SetIntensity_Impl(intensity, kDispRail_Curve, kDispOffset_Curve, kChipCount_Curve); }
-
-//----------------------------------------------------------------------------
-
-static float  _integratePulse01(float t0, float t1, float k)
-{
-  float x = 2*t0 - 1;
-  float y = 2*t1 - 1;
-  float num = (y*y - 4*t1 - x*x + 4*t0) * k;
-  return abs(num / 4 + t1 - t0);
-}
-
-//----------------------------------------------------------------------------
-
-static float  _integratePulse(float t0, float t1, float k)
-{
-  float sum = 0;
-  if (t0 < 0.0f)
-  {
-    sum += _integratePulse01(1.0f - t0, 1.0f, k);
-    sum += _integratePulse01(0.0f, t1, k);
-  }
-  else
-  {
-    sum += _integratePulse01(t0, t1, k);
-  }
-  return sum;
+  bpm.DrawCurve(displayRails[kDispRail_Curve]);
 }
 
 //----------------------------------------------------------------------------
 
 void loop()
 {
-  ReadBPMControls();
+  // Update BPM curve
+  if (bpm.Update())
+  {
+    heartbeats.DirtyBPMCurve();
+    bpm.DrawCurve(displayRails[kDispRail_Curve]);
+  }
 
+  // Update current date
   if (currentDate.Update())
   {
-    // Date has changed
-    // Update population count at date
-    popcount = GetPopulationAtDate(currentDate.Year());
-
-    _PopulationDisplay(popcount);
-    _DateDisplay(currentDate.Year());
+    // Date has changed, update population count at current date
+    population.SetYear(currentDate.Year());
+    heartbeats.SetPopulation(population.Population());
+  
+    population.Print(displayRails[kDispRail_Population], kDispOffset_Population);
+    currentDate.Print(displayRails[kDispRail_Date], kDispOffset_Date);
   }
 
-#if 1
-  const int dtMs = SyncFrameTick(10);
-  cur_time += dtMs;
-
-  SBigNum newHBCount = hbCount;
-
-  if (popcount <= 2)
+  const int dtMS = SyncFrameTick(10);
+  if (heartbeats.Update(dtMS))
   {
-    int nextBeatDelay = (uint32_t(1000) * 60) / 68; // in ms
-    if (cur_time >= nextBeatDelay)
-    {
-      cur_time -= nextBeatDelay;
-      newHBCount += 1;
-    }
-  }
-  else
-  {
-    int nextBeatDelay = (uint32_t(1000) * 60) / 68; // in ms
-  
-    // when sync == 1, everyone beats at the same tick    (discrete spike curve, slope = +inf)
-    // when sync == 0, everyone beats at a different tick (flat curve, slope = 0)
-    float sync = 1;//clamp(input / 1000.0f, 0.0f, 1.0f);//1.0f; // should be 1023, but allow for pot imprecisions & voltage losses
-    bool  synchronized = true;//sync > 0.99f;
-    float v = 0.0f;
-    float total_integral = 1.0f;
-    if (!synchronized)
-    {
-      static float  prevT = 0.0f;
-      float t = cur_time / float(nextBeatDelay);
-      if (cur_time >= nextBeatDelay)
-      {
-        while (cur_time >= nextBeatDelay)
-        {
-          cur_time -= nextBeatDelay;
-          t -= 1.0f;
-        }
-        prevT -= 1.0f;
-      }
-  
-      float slope = 1.0f / (1 - sync);
-      //v = slope * abs(t - 0.5f) * 2 - (slope - 1);
-      total_integral = -(slope - 2) / 2;
-      v = _integratePulse(prevT, t, slope) / total_integral;
-  
-      Serial.print("[");
-      Serial.print(prevT);
-      Serial.print(", ");
-      Serial.print(t);
-      Serial.print("]: ");
-      Serial.println(v);
-  
-      prevT = t;
-    }
-    else
-    {
-#if 0
-      const int   countDownWidth = 30 + 1;
-      const float k = 10;
-      const float kNorm = 0.42386f;
-#else
-      const int   countDownWidth = 50 + 1;
-      const float k = 100;
-      const float kNorm = 0.9925096f;
-#endif
-      static int  countDown = 0;
-  
-      if (cur_time >= nextBeatDelay)
-      {
-        cur_time -= nextBeatDelay;
-        total_integral = 1.0f;
-        v = 0.0f;
-        countDown = countDownWidth;
-      }
-  
-      if (countDown > 0)
-      {
-        countDown--;
-        const float cursor = 1.0f - 2*(countDown / float(countDownWidth-1));  // [-1, 1]
-  
-        const float x = k * cursor;
-        const float den = 1 + x * x;
-        v = 1.0f / (den * den);
-
-        v *= kNorm;
-      }
-    }
-
-    if (v != 0)
-    {
-      newHBCount += v * popcount;
-  
-      // 2892479536812345671
-      // 10000000000000000000
-      // 11561240708638945646987
-    }
+    heartbeats.Print(displayRails[kDispRail_Main], kDispOffset_Main);
   }
 
-  if (newHBCount != hbCount)
-  {
-    hbCount = newHBCount;
-    hbCount.PrintTo7Seg(displayRails[kDispRail_Main], kDispOffset_Main);
-  }
-#endif
-
+  // Flush main display
   {
     LedControl  &segDisp = displayRails[kDispRail_Main];
     segDisp.flushDeviceState();
   }
+
 }
 
 //----------------------------------------------------------------------------
@@ -303,55 +154,23 @@ int SyncFrameTick(int targetMs)
 
 //----------------------------------------------------------------------------
 
-void  _PopulationDisplay(int64_t value)
-{
-  int dispOffset = kDispOffset_Population;
-  int kMaxDigits = 12;
-  LedControl  &segDisp = displayRails[kDispRail_Population];
-
-  int digitID = 0;
-  while (value != 0 && digitID < kMaxDigits)
-  {
-    byte  digit = value % 10;
-    value /= 10;
-    int   did = digitID++;
-    segDisp.setDigit(dispOffset + (did / 8), did % 8, digit, false);
-  }
-
-  if (digitID == 0)
-    segDisp.setRawDigit(dispOffset * 8 + digitID++, 0, false);
-
-  for (int i = digitID; i < kMaxDigits; i++)
-    segDisp.setRawChar((dispOffset + (i / 8)) * 8 + (i % 8), ' ', false);
-}
+void  setIntensity_Counter(float intensity) { _SetIntensity_Impl(intensity, kDispRail_Main, kDispOffset_Main, kChipCount_Main); }
+void  setIntensity_Population(float intensity) { _SetIntensity_Impl(intensity, kDispRail_Population, kDispOffset_Population, kChipCount_Population); }
+void  setIntensity_Date(float intensity) { _SetIntensity_Impl(intensity, kDispRail_Date, kDispOffset_Date, kChipCount_Date); }
+void  setIntensity_Curve(float intensity) { _SetIntensity_Impl(intensity, kDispRail_Curve, kDispOffset_Curve, kChipCount_Curve); }
 
 //----------------------------------------------------------------------------
 
-void  _DateDisplay(int32_t value)
+void  _SetIntensity_Impl(float intensity, int railId, int chipOffset, int chipCount)
 {
-  int dispOffset = kDispOffset_Date;
-  int kMaxDigits = 7;
-  LedControl  &segDisp = displayRails[kDispRail_Date];
+  const int hwIntensity = clamp(int(intensity * 15), 0, 15);
 
-  bool  negative = value < 0;
-  if (negative)
-    value = -value;
+  LedControl  &segDisp = displayRails[railId];
+  for (int i = chipOffset; i < chipCount; i++)
+    segDisp.setIntensity(i, hwIntensity);
 
-  int digitID = 0;
-  while (value != 0 && digitID < kMaxDigits - 1)
-  {
-    byte  digit = value % 10;
-    value /= 10;
-    segDisp.setDigit(dispOffset, digitID++, digit, false);
-  }
-
-  if (negative)
-    segDisp.setRawChar(dispOffset * 8 + digitID++, '-', false);
-  else if (digitID == 0)
-    segDisp.setRawDigit(dispOffset * 8 + digitID++, 0, false);
-
-  for (int i = digitID; i < kMaxDigits; i++)
-    segDisp.setRawChar(dispOffset * 8 + i, ' ', false);
+  for (int i = chipOffset; i < chipCount; i++)
+    segDisp.shutdown(i, false);
 }
 
 //----------------------------------------------------------------------------
