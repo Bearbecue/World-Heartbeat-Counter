@@ -50,8 +50,6 @@ const int   kChipCount_Curve = 8;
 
 //----------------------------------------------------------------------------
 
-unsigned long         prevFrameMs = 0;
-
 DateController        currentDate;
 BPMController         bpm;
 PopulationController  population;
@@ -61,6 +59,8 @@ HeartbeatController   heartbeats;
 
 void setup()
 {
+  pinMode(PIN_IN_SRR, INPUT); // Save/Restore/Reset pin
+
   // Clear displays
   for (int r = 0; r < kDispRailCount; r++)
   {
@@ -73,9 +73,9 @@ void setup()
     }
   }
 
-  Serial.begin(115200);
+//  displayRails[kDispRail_Date].setScanLimit(kDispOffset_Date, 4);
 
-  prevFrameMs = millis();
+  Serial.begin(115200);
 
   setIntensity_Counter(1.0f);
   setIntensity_Population(1.0f);
@@ -98,57 +98,111 @@ void setup()
 
 //----------------------------------------------------------------------------
 
+static int  _GetLoopDt()
+{
+  static long int prevMS = millis() - 10;
+  const long int  curMS = millis();
+  const int       dtMS = (curMS > prevMS) ? curMS - prevMS : 10;  // by default 10 ms when wrapping around
+  prevMS = curMS;
+  return dtMS;
+}
+
+//----------------------------------------------------------------------------
+
 void loop()
 {
+  const int dtMS = _GetLoopDt();
+
   // Update BPM curve
-  if (bpm.Update())
+#if 1
+  if (bpm.Update()) // ~0.74ms
   {
-    heartbeats.DirtyBPMCurve();
-    bpm.DrawCurve(displayRails[kDispRail_Curve]);
+    heartbeats.DirtyBPMCurve(); // ~8.43ms
+    bpm.DrawCurve(displayRails[kDispRail_Curve]); // ~8.60ms
   }
+#endif
 
   // Update current date
-  if (currentDate.Update())
+#if 1
+  if (currentDate.Update()) // ~0.01ms
   {
     // Date has changed, update population count at current date
-    population.SetYear(currentDate.Year());
-    heartbeats.SetPopulation(population.Population());
+    population.SetYear(currentDate.Year()); // ~0.42ms
+    heartbeats.SetPopulation(population.Population());  // 0ms
   
-    population.Print(displayRails[kDispRail_Population], kDispOffset_Population);
-    currentDate.Print(displayRails[kDispRail_Date], kDispOffset_Date);
+    currentDate.Print(displayRails[kDispRail_Date], kDispOffset_Date);  // ~0.20ms
+    population.Print(displayRails[kDispRail_Population], kDispOffset_Population); // ~0.48ms
   }
+#endif
 
-  const int dtMS = SyncFrameTick(10);
-  if (heartbeats.Update(dtMS))
+#if 1
+  if (population.Update(dtMS))  // ~0.05ms
   {
-    heartbeats.Print(displayRails[kDispRail_Main], kDispOffset_Main);
+    heartbeats.SetPopulation(population.Population());  // 0ms
+    population.Print(displayRails[kDispRail_Population], kDispOffset_Population); // ~1.17ms
   }
+#endif
+
+#if 1
+  if (heartbeats.Update(dtMS))  // ~0.23ms
+  {
+    heartbeats.Print(displayRails[kDispRail_Main], kDispOffset_Main); // ~1.2ms for full display
+  }
+#endif
 
   // Flush main display
+#if 1
   {
     LedControl  &segDisp = displayRails[kDispRail_Main];
-    segDisp.flushDeviceState();
+    segDisp.flushDeviceState(); // ~15ms when everything is updating
+  }
+#endif
+
+  {
+    static long int prevMS = millis();
+    long int        curMS = millis();
+    static int32_t  count = 0;
+    static int32_t  acc = 0;
+    acc += dtMS;
+    count += 1;
+    if (curMS - prevMS > 1000)
+    {
+      Serial.print("Avg tick time: ");
+      Serial.print(acc / float(count));
+      Serial.print(" - ");
+      Serial.print((curMS - prevMS) / float(count));
+      Serial.println(" ms");
+      count = 0;
+      acc = 0;
+      prevMS = curMS;
+    }
   }
 
+  SyncFrameTick(10);
 }
 
 //----------------------------------------------------------------------------
 
 int SyncFrameTick(int targetMs)
 {
-  const int       kDefaultUpdateMsOnInternalOverflow = 10; // When u32 overflows (after ~50 days), default to 10ms step
-  unsigned long   curMs = 0;
-  int             updateMs = 0;
+  const int             kDefaultUpdateMsOnInternalOverflow = 10; // When u32 overflows (after ~50 days), default to 10ms step
+  static unsigned long  prevFrameMs = millis() - kDefaultUpdateMsOnInternalOverflow;  // use default dt on initial call
+  unsigned long         curMs = 0;
+  int                   updateMs = 0;
   do
   {
     curMs = millis();
     updateMs = ((curMs >= prevFrameMs) ? (curMs - prevFrameMs) : kDefaultUpdateMsOnInternalOverflow);
-    if (updateMs < targetMs)
-      delay(targetMs - updateMs);
+    // delay() for 1ms less than what we should theoretically wait for.
+    // Improves waiting precision because delay() overshoots of 200us on average.
+    // Doing this brings is down one magnitude level to ~35us on average
+    // Not that we care, but cleaner. Will cause a few loop iterations to busy-run only calling 'millis()'
+    // without any delay until the desired wait target is reached
+    if (targetMs - 1 > updateMs)
+      delay(targetMs - 1 - updateMs);
   } while (updateMs < targetMs);
 
   prevFrameMs = curMs;
-  
   return updateMs;
 }
 

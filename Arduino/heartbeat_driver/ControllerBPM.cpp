@@ -84,17 +84,15 @@ bool  BPMController::Update()
       sum += bpmRatioHistories[i][j];
     float newVF = sum / float(kBPMHistorySize);
 
-    int newValue = sum / kBPMHistorySize;
+//    int newValue = sum / kBPMHistorySize;
     if (bpmRatios[i] - 0.5f > newVF ||
         bpmRatios[i] + 0.5f < newVF)
     {
       dirty = true;
       bpmRatios[i] = newVF;
+      kBPMPoints[1 + i].y = clamp(int(bpmRatios[i]) * BPM_RATIO_QUANTIZER, 0, kBPMScaleMax);
     }
   }
-
-  for (int i = 0; i < 4; i++)
-    kBPMPoints[1 + i].y = clamp(int(bpmRatios[i]) * BPM_RATIO_QUANTIZER, 0, kBPMScaleMax);
 
   return dirty;
 }
@@ -129,6 +127,16 @@ float _InterpolateBPMCP(const struct SVec2I &p0, const struct SVec2I &p1, float 
 
 void  BPMController::DrawCurve(LedControl &segDisp)
 {
+#if 0
+
+  for (int x = 0; x < kDimX; x++)
+  {
+    segDisp.setRawData((x % 8) + 8 * (1 + (x / 8) * kCellsY), 0xFF);
+    segDisp.setRawData((x % 8) + 8 * (0 + (x / 8) * kCellsY), 0xFF);
+  }
+
+  segDisp.flushDeviceState();
+#else
   int bpmStart = kBPMPoints[0].x;
   int bpmEnd = kBPMPoints[kPointCount-1].x;
 
@@ -191,6 +199,7 @@ void  BPMController::DrawCurve(LedControl &segDisp)
   }
 
   segDisp.flushDeviceState();
+#endif
 }
 
 //----------------------------------------------------------------------------

@@ -1,9 +1,11 @@
 //----------------------------------------------------------------------------
 
 #include "ControllerHeartbeat.h"
+#include "HWPinConfig.h"
 
 const int   kBPMMin = 30;
 const int   kBPMMax = 200;
+const int   kSyncDivider = 64;  // [0, 1023] -> [0, 16]
 
 //----------------------------------------------------------------------------
 
@@ -12,22 +14,27 @@ HeartbeatController::HeartbeatController()
 , m_CurrentTime(0)
 , m_Population(0)
 , m_PeakBPM(60)
+, m_SyncLevel(0)
 {
   memset(m_TimeAcc, 0, sizeof(m_TimeAcc));
   memset(m_Countdown, 0, sizeof(m_Countdown));
+  memset(m_Carry, 0, sizeof(m_Carry));
 }
 
 //----------------------------------------------------------------------------
 
 void  HeartbeatController::Setup(const BPMController *bpmController)
 {
+  pinMode(PIN_IN_SYNC, INPUT);
+
   m_BPMCurve = bpmController;
 
   m_CurrentBPMSampleCount = 1;
 
+  m_SyncLevel = analogRead(PIN_IN_SYNC) / kSyncDivider;
+
   _RebuildBPMKernel();
 }
-
 
 //----------------------------------------------------------------------------
 
@@ -47,6 +54,22 @@ void  HeartbeatController::DirtyBPMCurve()
 
 void  HeartbeatController::_RebuildBPMKernel()
 {
+  // Compute sample count from sync level
+  if (m_SyncLevel >= 14)
+    m_CurrentBPMSampleCount = 1;
+  else if (m_SyncLevel >= 12)
+    m_CurrentBPMSampleCount = 2;
+  else if (m_SyncLevel >= 10)
+    m_CurrentBPMSampleCount = 3;
+  else if (m_SyncLevel >= 8)
+    m_CurrentBPMSampleCount = 4;
+  else
+    m_CurrentBPMSampleCount = kMaxBPMSampleCount;
+
+/*  Serial.print(m_SyncLevel);
+  Serial.print(" - ");
+  Serial.println(m_CurrentBPMSampleCount);*/
+
   if (m_BPMCurve == NULL)
     return;
 
@@ -177,11 +200,12 @@ void  HeartbeatController::_UpdateHiCount(SBigNum &newHBCount, int dtMS)
       v *= m_BPMKernel[i];
       v *= kNorm;
 
-      newHBCount += v * m_Population;
+      float   hbIncF = v * m_Population + m_Carry[i];
+      int64_t hbIncI = hbIncF;
+      m_Carry[i] = hbIncI - hbIncF;
+      newHBCount += hbIncI;
     }
 #endif
-
-//    Serial.println(i);
   }
 }
 
@@ -190,6 +214,15 @@ void  HeartbeatController::_UpdateHiCount(SBigNum &newHBCount, int dtMS)
 bool  HeartbeatController::Update(int dtMS)
 {
   m_CurrentTime += dtMS;
+
+  {
+    const int rawSync = analogRead(PIN_IN_SYNC) / kSyncDivider;
+    if (m_SyncLevel != rawSync)
+    {
+      m_SyncLevel = rawSync;
+      _RebuildBPMKernel();
+    }
+  }
 
   SBigNum newHBCount = m_Counter;
 

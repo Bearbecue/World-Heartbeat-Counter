@@ -22,7 +22,7 @@ public:
   void  SetPopulation(uint64_t population);
   void  DirtyBPMCurve();
 
-  // Returns 'true' if the date has changed
+  // Returns 'true' if the heartbeat counter has changed
   bool  Update(int dtMS);
 
   // Print the current heartbeat counter to the 7-segment displays
@@ -36,11 +36,13 @@ private:
   int                 m_CurrentTime;
   int                 m_CurrentBPMSampleCount;
   int                 m_PeakBPM;
+  byte                m_SyncLevel;
 
   uint64_t            m_Population;
   
   int                 m_TimeAcc[kMaxBPMSampleCount];
   int                 m_Countdown[kMaxBPMSampleCount];
+  float               m_Carry[kMaxBPMSampleCount];
   float               m_BPMKernel[kMaxBPMSampleCount];
 
   void                _UpdateLoCount(SBigNum &v, int dtMS);

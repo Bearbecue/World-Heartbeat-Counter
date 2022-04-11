@@ -75,22 +75,52 @@ void SBigNum::PrintToSerial() const
 
 void SBigNum::PrintTo7Seg(LedControl &segDisp, int offset) const
 {
+  // Perfs:
+  // Displaying all 20 digits @ 888888888888:
+  //  1x int64_t + 1x int32_t: 2.75ms
+  //  3x int32_t + 1x int32_t: 1.17ms <--- best
+  //  5x int16_t + 1x int32_t: 1.34ms
+
+  // 2.93 -> 1.53
   uint64_t  hbc_0 = m_HBC0;
   uint32_t  hbc_1 = m_HBC1;
 
   const int kMaxValueDigits = 20;//hbc_0_maxDigitCount + hbc_1_maxDigitCount;
   byte  digits[hbc_0_maxDigitCount + hbc_1_maxDigitCount]; // max number of digits in both nums + null terminating character
   int   digitCount = 0;
+
+#if 1 // ~1.17 ms to display all 20 digits
+  int nextDIDTarget = 9;
+  while (hbc_0 != 0)
+  {
+    int32_t valuePart = hbc_0 % 1000000000;
+    hbc_0 /= 1000000000;
+
+    while (valuePart != 0)
+    {
+      digits[digitCount++] = valuePart % 10;
+      valuePart /= 10;
+    }
+    if (hbc_0 != 0)
+    {
+      while (digitCount < nextDIDTarget)
+        digits[digitCount++] = 0;
+    }
+    nextDIDTarget += 4;
+  }
+#else // ~2.75 ms
   while (hbc_0 != 0)
   {
     digits[digitCount++] = hbc_0 % 10;
     hbc_0 /= 10;
   }
+#endif
 
   if (hbc_1 != 0)
   {
     while (digitCount < hbc_0_maxDigitCount)
-      digits[digitCount++] = '0';
+      digits[digitCount++] = 0;
+
     while (hbc_1 != 0)
     {
       digits[digitCount++] = hbc_1 % 10;
