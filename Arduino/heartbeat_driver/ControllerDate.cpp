@@ -16,24 +16,24 @@ int             prevCLK2 = 0;
 
 void  updateRotaryEncoder()
 {
-  int currentCLK = digitalRead(DATE_ROTENC_PIN_A);
-  int currentDT = digitalRead(DATE_ROTENC_PIN_B);
+  const int currentCLK = digitalRead(DATE_ROTENC_PIN_A);
+  const int currentDT = digitalRead(DATE_ROTENC_PIN_B);
   if (currentDT != currentCLK)
-    rotEncCounterRaw++;
+    rotEncCounterRaw--; // CCW: Decrement date
   else
-    rotEncCounterRaw--;
+    rotEncCounterRaw++; // CW: Increment date
 }
 
 //----------------------------------------------------------------------------
 
 void  updateRotaryEncoder2()
 {
-  int currentCLK = digitalRead(DATE_ROTENC2_PIN_A);
-  int currentDT = digitalRead(DATE_ROTENC2_PIN_B);
+  const int currentCLK = digitalRead(DATE_ROTENC2_PIN_A);
+  const int currentDT = digitalRead(DATE_ROTENC2_PIN_B);
   if (currentDT != currentCLK)
-    rotEncCounterRaw2++;
-  else
     rotEncCounterRaw2--;
+  else
+    rotEncCounterRaw2++;
 }
 
 //----------------------------------------------------------------------------
@@ -51,7 +51,7 @@ void  DateController::Setup()
 {
   // Setup rotary encoder
   pinMode(DATE_ROTENC_PIN_A, INPUT_PULLUP);
-  pinMode(DATE_ROTENC_PIN_B, INPUT);
+  pinMode(DATE_ROTENC_PIN_B, INPUT_PULLUP);
   pinMode(DATE_ROTENC2_PIN_A, INPUT_PULLUP);
   pinMode(DATE_ROTENC2_PIN_B, INPUT);
   pinMode(DATE_ROTENC2_PIN_C, INPUT);

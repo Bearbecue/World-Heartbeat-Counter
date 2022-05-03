@@ -26,6 +26,7 @@ HeartbeatController::HeartbeatController()
 void  HeartbeatController::Setup(const BPMController *bpmController)
 {
   pinMode(PIN_IN_SYNC, INPUT);
+  pinMode(PIN_IN_SRR, INPUT); // Save/Restore/Reset pin
 
   m_BPMCurve = bpmController;
 
@@ -63,8 +64,14 @@ void  HeartbeatController::_RebuildBPMKernel()
     m_CurrentBPMSampleCount = 3;
   else if (m_SyncLevel >= 8)
     m_CurrentBPMSampleCount = 4;
-  else
+  else if (m_SyncLevel >= 6)
+    m_CurrentBPMSampleCount = 6;
+  else if (m_SyncLevel >= 4)
+    m_CurrentBPMSampleCount = 10;
+  else if (m_SyncLevel >= 2)
     m_CurrentBPMSampleCount = kMaxBPMSampleCount;
+  else
+    m_CurrentBPMSampleCount = kMaxBPMSampleCount; // TODO: Uniform increments
 
 /*  Serial.print(m_SyncLevel);
   Serial.print(" - ");
@@ -226,7 +233,11 @@ bool  HeartbeatController::Update(int dtMS)
 
   SBigNum newHBCount = m_Counter;
 
-  if (m_Population <= 2)
+  if (digitalRead(PIN_IN_SRR) == HIGH)
+  {
+    newHBCount = SBigNum(); // Reset count to zero !
+  }
+  else if (m_Population <= 2)
   {
     _UpdateLoCount(newHBCount, dtMS);
   }

@@ -59,8 +59,6 @@ HeartbeatController   heartbeats;
 
 void setup()
 {
-  pinMode(PIN_IN_SRR, INPUT); // Save/Restore/Reset pin
-
   // Clear displays
   for (int r = 0; r < kDispRailCount; r++)
   {
