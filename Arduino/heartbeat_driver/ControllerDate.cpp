@@ -7,7 +7,6 @@ int32_t         kDateMin = -100000;
 int32_t         kDateMax = 2100;
 
 int32_t         rotEncCounterRaw = 0;
-int32_t         rotEncCounterRaw2 = 0;
 
 int             prevCLK = 0;
 int             prevCLK2 = 0;
@@ -26,20 +25,8 @@ void  updateRotaryEncoder()
 
 //----------------------------------------------------------------------------
 
-void  updateRotaryEncoder2()
-{
-  const int currentCLK = digitalRead(DATE_ROTENC2_PIN_A);
-  const int currentDT = digitalRead(DATE_ROTENC2_PIN_B);
-  if (currentDT != currentCLK)
-    rotEncCounterRaw2--;
-  else
-    rotEncCounterRaw2++;
-}
-
-//----------------------------------------------------------------------------
-
 DateController::DateController()
-: m_CurrentYear(2022)
+: m_CurrentYear(0)
 //: m_CurrentYear(-99953)
 //: m_CurrentYear(-100000)
 {
@@ -47,20 +34,16 @@ DateController::DateController()
 
 //----------------------------------------------------------------------------
 
-void  DateController::Setup()
+void  DateController::Setup(int32_t startDate)
 {
+  m_CurrentYear = startDate;
+
   // Setup rotary encoder
   pinMode(DATE_ROTENC_PIN_A, INPUT_PULLUP);
   pinMode(DATE_ROTENC_PIN_B, INPUT_PULLUP);
-  pinMode(DATE_ROTENC2_PIN_A, INPUT_PULLUP);
-  pinMode(DATE_ROTENC2_PIN_B, INPUT);
-  pinMode(DATE_ROTENC2_PIN_C, INPUT);
 
   prevCLK = digitalRead(DATE_ROTENC_PIN_A);
   attachInterrupt(digitalPinToInterrupt(DATE_ROTENC_PIN_A), updateRotaryEncoder, RISING);
-
-  prevCLK2 = digitalRead(DATE_ROTENC2_PIN_A);
-  attachInterrupt(digitalPinToInterrupt(DATE_ROTENC2_PIN_A), updateRotaryEncoder2, RISING);
 }
 
 //----------------------------------------------------------------------------
@@ -68,16 +51,6 @@ void  DateController::Setup()
 bool DateController::Update()
 {
   bool  changed = false;
-
-  static int32_t  prevRotEncCounterRaw2 = 0;
-  if (rotEncCounterRaw2 != prevRotEncCounterRaw2)
-  {
-    int32_t  delta = rotEncCounterRaw2 - prevRotEncCounterRaw2;
-    prevRotEncCounterRaw2 = rotEncCounterRaw2;
-    Serial.print(rotEncCounterRaw2);
-    Serial.print(" | ");
-    Serial.println(delta);
-  }
 
   static int32_t  prevRotEncCounterRaw = 0;
   if (rotEncCounterRaw != prevRotEncCounterRaw)

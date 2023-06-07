@@ -10,7 +10,7 @@ class DateController
 public:
   DateController();
 
-  void  Setup();
+  void  Setup(int32_t startDate);
 
   // Returns 'true' if the date has changed
   bool  Update();

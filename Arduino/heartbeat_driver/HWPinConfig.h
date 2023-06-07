@@ -7,10 +7,12 @@
 #define PIN_OUT_DISP_MOSI   8   // SCL (FastLed crashes the board on init if using GPIO8 (HW MOSI)
 #define PIN_OUT_DISP_CLK    6   // SDA (FastLed crashes the board on init if using GPIO6 (HW CLK)
 #define PIN_OUT_RAIL0_CS    7   // (FastLed crashes the board on init if using GPIO11 (HW CS0)
-#define PIN_OUT_RAIL1_CS    5   // We can use these pins if we need more rails
+#define PIN_OUT_RAIL1_CS    3
+#define PIN_OUT_RAIL2_CS    5
 
 #define PIN_OUT_LED_BIRTH   10  // PWM pin
 #define PIN_OUT_LED_DEATH   11  // PWM pin
+// Available: 12
 
 //----------------------------------------------------------------------------
 #if (HW_MK == 1)
@@ -24,11 +26,8 @@
 # define PIN_IN_SYNC         A3  // Beat synchronization
 # define PIN_IN_SRR          A2  // Save/Restore/Reset
 
-# define DATE_ROTENC_PIN_A   3
+# define DATE_ROTENC_PIN_A   2
 # define DATE_ROTENC_PIN_B   4
-# define DATE_ROTENC2_PIN_A  2
-# define DATE_ROTENC2_PIN_B  A1
-# define DATE_ROTENC2_PIN_C  A2
 
 #else // MK2 and above
 
@@ -43,9 +42,6 @@
 
 # define DATE_ROTENC_PIN_A   3
 # define DATE_ROTENC_PIN_B   4
-# define DATE_ROTENC2_PIN_A  2
-# define DATE_ROTENC2_PIN_B  A0
-# define DATE_ROTENC2_PIN_C  A1
 
 #endif
 

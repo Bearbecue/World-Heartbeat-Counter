@@ -22,8 +22,9 @@
 
 LedControl  displayRails[] =
 {
-  LedControl(PIN_OUT_DISP_MOSI, PIN_OUT_DISP_CLK, PIN_OUT_RAIL0_CS, 8), // MOSI, CLK, CS, # of 7219s daisy-chained together
-  LedControl(PIN_OUT_DISP_MOSI, PIN_OUT_DISP_CLK, PIN_OUT_RAIL1_CS, 8),
+  LedControl(PIN_OUT_DISP_MOSI, PIN_OUT_DISP_CLK, PIN_OUT_RAIL0_CS, 5), // MOSI, CLK, CS, # of 7219s daisy-chained together
+  LedControl(PIN_OUT_DISP_MOSI, PIN_OUT_DISP_CLK, PIN_OUT_RAIL1_CS, 1),
+  LedControl(PIN_OUT_DISP_MOSI, PIN_OUT_DISP_CLK, PIN_OUT_RAIL2_CS, 8),
 };
 const int   kDispRailCount = sizeof(displayRails) / sizeof(displayRails[0]); // number of HW rails, up to 8 displays of 8 digits each
 
@@ -39,12 +40,12 @@ const int   kDispOffset_Population = kDispOffset_Main + kChipCount_Main;
 const int   kChipCount_Population = 2;
 
 // Address of date display
-const int   kDispRail_Date = 0;
-const int   kDispOffset_Date = kDispOffset_Population + kChipCount_Population;
+const int   kDispRail_Date = 1;
+const int   kDispOffset_Date = 0;
 const int   kChipCount_Date = 1;
 
 // Address of curve display
-const int   kDispRail_Curve = 1;
+const int   kDispRail_Curve = 2;
 const int   kDispOffset_Curve = 0;
 const int   kChipCount_Curve = 8;
 
@@ -59,6 +60,10 @@ HeartbeatController   heartbeats;
 
 void setup()
 {
+  pinMode(PIN_OUT_RAIL0_CS, OUTPUT);
+  pinMode(PIN_OUT_RAIL1_CS, OUTPUT);
+  pinMode(PIN_OUT_RAIL2_CS, OUTPUT);
+
   // Clear displays
   for (int r = 0; r < kDispRailCount; r++)
   {
@@ -82,7 +87,7 @@ void setup()
 
   bpm.Setup();
   heartbeats.Setup(&bpm);
-  currentDate.Setup();
+  currentDate.Setup(2023);
   population.Setup();
   
   population.SetYear(currentDate.Year());
@@ -90,6 +95,7 @@ void setup()
 
   population.Print(displayRails[kDispRail_Population], kDispOffset_Population);
   currentDate.Print(displayRails[kDispRail_Date], kDispOffset_Date);
+  displayRails[kDispRail_Date].flushDeviceState();
 
   bpm.DrawCurve(displayRails[kDispRail_Curve]);
 }
@@ -127,9 +133,10 @@ void loop()
     // Date has changed, update population count at current date
     population.SetYear(currentDate.Year()); // ~0.42ms
     heartbeats.SetPopulation(population.Population());  // 0ms
-  
+
     currentDate.Print(displayRails[kDispRail_Date], kDispOffset_Date);  // ~0.20ms
     population.Print(displayRails[kDispRail_Population], kDispOffset_Population); // ~0.48ms
+    displayRails[kDispRail_Date].flushDeviceState(); // ~15ms when everything is updating
   }
 #endif
 
