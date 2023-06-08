@@ -2,6 +2,7 @@
 
 #include "ControllerDate.h"
 #include "HWPinConfig.h"
+#include "PersistentMemory.h"
 
 int32_t         kDateMin = -100000;
 int32_t         kDateMax = 2100;
@@ -27,28 +28,40 @@ void  updateRotaryEncoder()
 
 DateController::DateController()
 : m_CurrentYear(0)
-//: m_CurrentYear(-99953)
-//: m_CurrentYear(-100000)
 {
 }
 
 //----------------------------------------------------------------------------
 
-void  DateController::Setup(int32_t startDate)
+void  DateController::Setup()
 {
-  m_CurrentYear = startDate;
-
   // Setup rotary encoder
   pinMode(DATE_ROTENC_PIN_A, INPUT_PULLUP);
   pinMode(DATE_ROTENC_PIN_B, INPUT_PULLUP);
 
   prevCLK = digitalRead(DATE_ROTENC_PIN_A);
   attachInterrupt(digitalPinToInterrupt(DATE_ROTENC_PIN_A), updateRotaryEncoder, RISING);
+
+  LoadState();
 }
 
 //----------------------------------------------------------------------------
 
-bool DateController::Update()
+void  DateController::LoadState()
+{
+  m_CurrentYear = eeprom_read_date(g_CurrentStateID);
+}
+
+//----------------------------------------------------------------------------
+
+void  DateController::WriteState()
+{
+  eeprom_write_date(g_CurrentStateID, Year());
+}
+
+//----------------------------------------------------------------------------
+
+bool DateController::Update(int dtMS)
 {
   bool  changed = false;
 
@@ -57,7 +70,7 @@ bool DateController::Update()
   {
     int32_t  delta = rotEncCounterRaw - prevRotEncCounterRaw;
     prevRotEncCounterRaw = rotEncCounterRaw;
-  
+
     // Note: Here in theory 'delta' should contain the actual offset since last tick.
     // If user turns the rotary encoder real fast, because we have an interrupt setup it should
     // not miss any step, but for some reason, it doesn't work reliably, and even when turning
@@ -109,6 +122,23 @@ bool DateController::Update()
     {
       m_CurrentYear = newCurYear;
       changed = true;
+    }
+  }
+
+  // If the date changed, start a countdown timer and write it to EEPROM after some time
+  // if it has not changed again:
+  {
+    static int32_t  dateDirtyDelayMS = 0;
+    if (changed)
+      dateDirtyDelayMS = 4 * 1000;  // write it to EEPROM in 4 seconds if we didn't change it again
+    if (dateDirtyDelayMS > 0)
+    {
+      dateDirtyDelayMS -= dtMS;
+      if (dateDirtyDelayMS <= 0)
+      {
+        dateDirtyDelayMS = 0;
+        WriteState();
+      }
     }
   }
 

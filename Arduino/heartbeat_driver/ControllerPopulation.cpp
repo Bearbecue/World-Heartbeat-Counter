@@ -299,24 +299,28 @@ static const SPopulationRecord	kPopulationRecord[] PROGMEM =
   { 2020,   7794798725ULL, 0.018077f },
   { 2021,   7874965730ULL, 0.017873f },
   { 2022,   7901037895ULL, 0.017668f },
+  { 2023,   7942645086ULL, 0.017464f },
 
   // Predictions
-  { 2025,   8184045647ULL, 0.017134f },
-  { 2030,   8549794072ULL, 0.016390f },
-  { 2035,   8888239030ULL, 0.015811f },
-  { 2040,   9199776621ULL, 0.015329f },
-  { 2045,   9482912459ULL, 0.014893f },
-  { 2050,   9735062210ULL, 0.014446f },
-  { 2055,   9958477292ULL, 0.014054f },
-  { 2060,  10152454653ULL, 0.013673f },
-  { 2065,  10318205330ULL, 0.013337f },
-  { 2070,  10459819401ULL, 0.013036f },
-  { 2075,  10577251239ULL, 0.012765f },
-  { 2080,  10674396380ULL, 0.012504f },
-  { 2085,  10750077808ULL, 0.012239f },
-  { 2090,  10810150426ULL, 0.011980f },
-  { 2095,  10852212929ULL, 0.011733f },
-  { 2100,  10875891927ULL, 0.011497f },
+  { 2024,   8031800429ULL, 0.017280f },
+  { 2025,   8108605388ULL, 0.017150f },
+  { 2026,   8184045647ULL, 0.017004f },
+  { 2027,   8259276737ULL, 0.016880f },
+  { 2031,   8549794072ULL, 0.016390f },
+  { 2036,   8888239030ULL, 0.015811f },
+  { 2041,   9199776621ULL, 0.015329f },
+  { 2046,   9482912459ULL, 0.014893f },
+  { 2051,   9735062210ULL, 0.014446f },
+  { 2056,   9958477292ULL, 0.014054f },
+  { 2061,  10152454653ULL, 0.013673f },
+  { 2066,  10318205330ULL, 0.013337f },
+  { 2071,  10459819401ULL, 0.013036f },
+  { 2076,  10577251239ULL, 0.012765f },
+  { 2081,  10674396380ULL, 0.012504f },
+  { 2086,  10750077808ULL, 0.012239f },
+  { 2091,  10810150426ULL, 0.011980f },
+  { 2096,  10852212929ULL, 0.011733f },
+  { 2101,  10875891927ULL, 0.011497f },
 };
 const int kPopulationRecordSize = sizeof(kPopulationRecord) / sizeof(kPopulationRecord[0]);
 
@@ -372,27 +376,28 @@ float PopulationController::_GetPopulationAtDate(int32_t year)
   {
     if (id == 0)  // we can't be on zero, bug ! Caught it early on
       Serial.println("bug in binary search");
-    int id0 = id - 1;
-    int id1 = id;
-    int32_t  date0 = pgm_read_dword_near(&kPopulationRecord[id0].date);
-    int32_t  date1 = pgm_read_dword_near(&kPopulationRecord[id1].date);
+    int     id0 = id - 1;
+    int     id1 = id;
+    int32_t date0 = pgm_read_dword_near(&kPopulationRecord[id0].date);
+    int32_t date1 = pgm_read_dword_near(&kPopulationRecord[id1].date);
     if (date < date0)
     {
       wsize = wsize / 2;
-      id = id - (wsize - wsize / 2);
+      id -= (wsize - wsize / 2);
     }
     else if (date > date1)
     {
-      wsize = wsize - wsize / 2;
-      id = id + wsize / 2;
+      wsize -= wsize / 2;
+      id += wsize / 2;
     }
     else
     {
       // we're on it !
-      int64_t   pop0 = _pgm_read_qword_near(&kPopulationRecord[id0].population);
-      int64_t   pop1 = _pgm_read_qword_near(&kPopulationRecord[id1].population);
-      float br0 = pgm_read_float_near(&kPopulationRecord[id0].birthRate);
-      float br1 = pgm_read_float_near(&kPopulationRecord[id0].birthRate);
+      int64_t     pop0 = _pgm_read_qword_near(&kPopulationRecord[id0].population);
+      int64_t     pop1 = _pgm_read_qword_near(&kPopulationRecord[id1].population);
+      const float br0 = pgm_read_float_near(&kPopulationRecord[id0].birthRate);
+      const float br1 = pgm_read_float_near(&kPopulationRecord[id0].birthRate);
+
       float birthRate = 0.0f;
       {
         float t = (date - date0) / float(date1 - date0);

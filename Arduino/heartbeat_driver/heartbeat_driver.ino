@@ -14,17 +14,15 @@
 #include "ControllerDate.h"
 #include "ControllerPopulation.h"
 #include "ControllerHeartbeat.h"
+#include "PersistentMemory.h"
 
 //----------------------------------------------------------------------------
-// NOTE !!! We should be able to use the same MOSI & CLK pins between all rails,
-// and only have a dedicated 'CS' pin, that's the purpose of the CS pin.
-// However I did not double-check this. Check it !
 
 LedControl  displayRails[] =
-{
-  LedControl(PIN_OUT_DISP_MOSI, PIN_OUT_DISP_CLK, PIN_OUT_RAIL0_CS, 5), // MOSI, CLK, CS, # of 7219s daisy-chained together
-  LedControl(PIN_OUT_DISP_MOSI, PIN_OUT_DISP_CLK, PIN_OUT_RAIL1_CS, 1),
-  LedControl(PIN_OUT_DISP_MOSI, PIN_OUT_DISP_CLK, PIN_OUT_RAIL2_CS, 8),
+{ // MOSI, CLK, CS, # of 7219s daisy-chained together
+  LedControl(PIN_OUT_DISP_MOSI, PIN_OUT_DISP_CLK, PIN_OUT_RAIL0_CS, 3 + 2), // 3 MAX7219 for main counter + 2 for population count
+  LedControl(PIN_OUT_DISP_MOSI, PIN_OUT_DISP_CLK, PIN_OUT_RAIL1_CS, 1),     // 1 MAX7219 for date display
+  LedControl(PIN_OUT_DISP_MOSI, PIN_OUT_DISP_CLK, PIN_OUT_RAIL2_CS, 8),     // 8 MAX7219 for BPM curve: 4*2
 };
 const int   kDispRailCount = sizeof(displayRails) / sizeof(displayRails[0]); // number of HW rails, up to 8 displays of 8 digits each
 
@@ -80,6 +78,22 @@ void setup()
 
   Serial.begin(115200);
 
+#if 0
+  // First-time run/init
+  // We could do it more "smartly" and detect a magic-number or whatever.
+  // Don't bother. This is hacked together anyway, I'm only making one or two of these :)
+
+  eeprom_write_state(0);
+
+  for (int i = 0; i < 8; i++)
+  {
+    eeprom_write_date(i, 2023);
+    eeprom_write_beats(i, SBigNum()); // clear
+  }
+#endif
+
+  g_CurrentStateID = eeprom_read_state();
+
   setIntensity_Counter(1.0f);
   setIntensity_Population(1.0f);
   setIntensity_Date(1.0f);
@@ -87,7 +101,7 @@ void setup()
 
   bpm.Setup();
   heartbeats.Setup(&bpm);
-  currentDate.Setup(2023);
+  currentDate.Setup();
   population.Setup();
   
   population.SetYear(currentDate.Year());
@@ -117,6 +131,9 @@ void loop()
 {
   const int dtMS = _GetLoopDt();
 
+  // Update state button
+  update_state(dtMS);
+
   // Update BPM curve
 #if 1
   if (bpm.Update()) // ~0.74ms
@@ -128,7 +145,7 @@ void loop()
 
   // Update current date
 #if 1
-  if (currentDate.Update()) // ~0.01ms
+  if (currentDate.Update(dtMS)) // ~0.01ms
   {
     // Date has changed, update population count at current date
     population.SetYear(currentDate.Year()); // ~0.42ms
@@ -184,6 +201,83 @@ void loop()
   }
 
   SyncFrameTick(10);
+}
+
+//----------------------------------------------------------------------------
+
+void  update_state(int dtMS)
+{
+  static int32_t  pressedTimer = 0;
+  static bool     prevPressed = LOW;
+  const bool      curPressed = digitalRead(PIN_IN_SRR) == HIGH;
+
+  const int32_t   kTimeBeforeHardReset = 4 * 1000;  // hard-reset when pressed for 4 seconds
+
+  bool            stateChanged = false;
+  if (curPressed != prevPressed)
+  {
+    if (!curPressed) // Just released
+    {
+      if (pressedTimer < kTimeBeforeHardReset)  // If this press did not cause a hard-reset
+      {
+        // We're going to cycle to a different state.
+        // Save the data of the previous state
+        heartbeats.WriteState();
+        currentDate.WriteState();
+
+        // Just cycle through the states
+        g_CurrentStateID = (g_CurrentStateID + 1) % kMaxStates;
+
+        // Load the new state
+        heartbeats.LoadState();
+        currentDate.LoadState();
+        stateChanged = true;
+      }
+      pressedTimer = 0; // Reset pressed timer
+    }
+    prevPressed = curPressed;
+  }
+
+  if (curPressed)
+  {
+    pressedTimer += dtMS;
+    if (pressedTimer >= kTimeBeforeHardReset) // If pressed for long enough, hard-reset the current counter
+      heartbeats.Reset();
+  }
+
+  if (stateChanged) // Update all the things that depend on the state
+  {
+    population.SetYear(currentDate.Year());
+    heartbeats.SetPopulation(population.Population());
+
+    // Reprint & Flush everything
+    currentDate.Print(displayRails[kDispRail_Date], kDispOffset_Date);
+    population.Print(displayRails[kDispRail_Population], kDispOffset_Population);
+    heartbeats.Print(displayRails[kDispRail_Main], kDispOffset_Main);
+
+    displayRails[kDispRail_Main].flushDeviceState();
+    displayRails[kDispRail_Date].flushDeviceState();
+
+    Serial.print("Current state: ");
+    Serial.println(g_CurrentStateID);
+  }
+
+  // If the state changed, start a countdown timer and write it to EEPROM after some time
+  // if it has not changed again:
+  {
+    static int32_t  stateDirtyDelayMS = 0;
+    if (stateChanged)
+      stateDirtyDelayMS = 4 * 1000;  // write it to EEPROM in 4 seconds if we didn't change it again
+    if (stateDirtyDelayMS > 0)
+    {
+      stateDirtyDelayMS -= dtMS;
+      if (stateDirtyDelayMS <= 0)
+      {
+        stateDirtyDelayMS = 0;
+        eeprom_write_state(g_CurrentStateID);
+      }
+    }
+  }
 }
 
 //----------------------------------------------------------------------------

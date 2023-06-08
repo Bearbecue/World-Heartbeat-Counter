@@ -10,10 +10,12 @@ class DateController
 public:
   DateController();
 
-  void  Setup(int32_t startDate);
+  void  Setup();
+  void  LoadState();
+  void  WriteState();
 
   // Returns 'true' if the date has changed
-  bool  Update();
+  bool  Update(int dtMS);
 
   // Date accessors
   int32_t Year() const { return m_CurrentYear; }

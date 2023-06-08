@@ -18,6 +18,9 @@ public:
   };
 
   void  Setup(const BPMController *bpmController);
+  void  LoadState();
+  void  WriteState();
+  void  Reset();
 
   void  SetPopulation(uint64_t population);
   void  DirtyBPMCurve();

@@ -2,6 +2,7 @@
 
 #include "ControllerHeartbeat.h"
 #include "HWPinConfig.h"
+#include "PersistentMemory.h"
 
 const int   kBPMMin = 30;
 const int   kBPMMax = 200;
@@ -29,12 +30,26 @@ void  HeartbeatController::Setup(const BPMController *bpmController)
   pinMode(PIN_IN_SRR, INPUT); // Save/Restore/Reset pin
 
   m_BPMCurve = bpmController;
-
   m_CurrentBPMSampleCount = 1;
-
   m_SyncLevel = analogRead(PIN_IN_SYNC) / kSyncDivider;
 
   _RebuildBPMKernel();
+
+  LoadState();
+}
+
+//----------------------------------------------------------------------------
+
+void  HeartbeatController::LoadState()
+{
+  m_Counter = eeprom_read_beats(g_CurrentStateID);
+}
+
+//----------------------------------------------------------------------------
+
+void  HeartbeatController::WriteState()
+{
+  eeprom_write_beats(g_CurrentStateID, m_Counter);
 }
 
 //----------------------------------------------------------------------------
@@ -218,6 +233,13 @@ void  HeartbeatController::_UpdateHiCount(SBigNum &newHBCount, int dtMS)
 
 //----------------------------------------------------------------------------
 
+void  HeartbeatController::Reset()
+{
+  m_Counter = SBigNum(); // Reset count to zero !
+}
+
+//----------------------------------------------------------------------------
+
 bool  HeartbeatController::Update(int dtMS)
 {
   m_CurrentTime += dtMS;
@@ -231,13 +253,17 @@ bool  HeartbeatController::Update(int dtMS)
     }
   }
 
-  SBigNum newHBCount = m_Counter;
-
-  if (digitalRead(PIN_IN_SRR) == HIGH)
   {
-    newHBCount = SBigNum(); // Reset count to zero !
+    static int  prevStateID = 0;
+    if (prevStateID != g_CurrentStateID)
+    {
+      prevStateID = g_CurrentStateID;
+      return;
+    }
   }
-  else if (m_Population <= 2)
+
+  SBigNum newHBCount = m_Counter;
+  if (m_Population <= 2)
   {
     _UpdateLoCount(newHBCount, dtMS);
   }
@@ -341,11 +367,22 @@ bool  HeartbeatController::Update(int dtMS)
 #endif
   }
 
-  if (newHBCount == m_Counter)
-    return false;
-
+  const bool  changed = (newHBCount != m_Counter);
   m_Counter = newHBCount;
-  return true;
+
+  // periodically backup the current count to the EEPROM
+  // in case there is a power-cut
+  {
+    static int32_t  dirtyDelayMS = 0;
+    dirtyDelayMS += dtMS;
+    if (dirtyDelayMS <= 5 * 60 * 1000)  // check it every 5 minutes (will actually take a lot longer to write something, because the low bits of the count are cleared before saving)
+    {
+      dirtyDelayMS = 0;
+      WriteState();
+    }
+  }
+
+  return changed;
 }
 
 //----------------------------------------------------------------------------
