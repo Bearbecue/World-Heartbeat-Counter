@@ -12,7 +12,7 @@ const int   kSyncDivider = 64;  // [0, 1023] -> [0, 16]
 
 HeartbeatController::HeartbeatController()
 : m_BPMCurve(NULL)
-, m_CurrentTime(0)
+, m_CurrentTimeAcc(0)
 , m_Population(0)
 , m_PeakBPM(60)
 , m_SyncLevel(0)
@@ -166,11 +166,40 @@ static float  _integratePulse(float t0, float t1, float k)
 
 void  HeartbeatController::_UpdateLoCount(SBigNum &newHBCount, int dtMS)
 {
-  int nextBeatDelay = (uint32_t(1000) * 60) / 68; // in ms
-  if (m_CurrentTime >= nextBeatDelay)
+  int       accountedPop = 0;
+
+  const int bpmSampleCount = m_CurrentBPMSampleCount;
+  for (int i = 0; i < bpmSampleCount; i++)
   {
-    m_CurrentTime -= nextBeatDelay;
-    newHBCount += 1;
+    const int targetBPM = bpmSampleCount == 1 ?
+                          m_PeakBPM :
+                          COMPUTE_BPM_FROM_SAMPLING_INDEX(i, bpmSampleCount, kBPMMin, kBPMMax);
+    const int nextBeatDelay = (60 * 1000L) / targetBPM; // in ms
+
+    const int popCount = m_BPMKernel[i] * m_Population;
+    accountedPop += popCount;
+
+    m_TimeAcc[i] += dtMS;
+    if (m_TimeAcc[i] >= nextBeatDelay)
+    {
+      m_TimeAcc[i] -= nextBeatDelay;
+      newHBCount += popCount;
+    }
+  }
+
+  const int missing = m_Population - accountedPop;
+  if (missing > 0)
+  {
+    const int targetBPM = m_PeakBPM;
+    const int bpmScale = (m_CurrentBPMSampleCount == 1) ? 1 : missing;
+    int       nextBeatDelay = (uint32_t(1000) * 60) / (targetBPM * bpmScale); // in ms
+
+    m_CurrentTimeAcc += dtMS;
+    if (m_CurrentTimeAcc >= nextBeatDelay)
+    {
+      m_CurrentTimeAcc -= nextBeatDelay;
+      newHBCount += missing / bpmScale;
+    }
   }
 }
 
@@ -242,8 +271,6 @@ void  HeartbeatController::Reset()
 
 bool  HeartbeatController::Update(int dtMS)
 {
-  m_CurrentTime += dtMS;
-
   {
     const int rawSync = analogRead(PIN_IN_SYNC) / kSyncDivider;
     if (m_SyncLevel != rawSync)
@@ -258,12 +285,12 @@ bool  HeartbeatController::Update(int dtMS)
     if (prevStateID != g_CurrentStateID)
     {
       prevStateID = g_CurrentStateID;
-      return;
+      return true;
     }
   }
 
   SBigNum newHBCount = m_Counter;
-  if (m_Population <= 2)
+  if (m_Population <= 200)
   {
     _UpdateLoCount(newHBCount, dtMS);
   }

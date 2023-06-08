@@ -36,7 +36,7 @@ private:
 
   SBigNum             m_Counter;
   
-  int                 m_CurrentTime;
+  int                 m_CurrentTimeAcc;
   int                 m_CurrentBPMSampleCount;
   int                 m_PeakBPM;
   byte                m_SyncLevel;
