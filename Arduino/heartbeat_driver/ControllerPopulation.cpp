@@ -4,7 +4,7 @@
 #include "HWPinConfig.h"
 #include <avr/pgmspace.h>
 
-#define DEBUG
+//#define DEBUG
 
 //----------------------------------------------------------------------------
 
@@ -63,10 +63,12 @@ static const SPopulationRecord	kPopulationRecord[] PROGMEM =
   { 1100,    397923741ULL, 0.055000f },
   { 1200,    444750711ULL, 0.053000f },
   { 1300,    456389012ULL, 0.053000f },
+  { 1347,    468712801ULL, 0.054000f }, // Black death start
+  { 1351,    443603494ULL, 0.054000f }, // Black death end: Toll = 25million deaths
   { 1400,    442480691ULL, 0.053000f },
-  { 1500,    503240510ULL, 0.050000f },
-  { 1600,    515751788ULL, 0.050000f },
-  { 1700,    591721802ULL, 0.050000f },
+  { 1500,    503240510ULL, 0.053000f },
+  { 1600,    515751788ULL, 0.052000f },
+  { 1700,    591721802ULL, 0.051000f },
   { 1710,    613189682ULL, 0.050000f },
   { 1720,    642718358ULL, 0.050000f },
   { 1730,    664734880ULL, 0.050000f },
@@ -328,12 +330,13 @@ const int kPopulationRecordSize = sizeof(kPopulationRecord) / sizeof(kPopulation
 
 PopulationController::PopulationController()
 : m_Population(0)
-, m_BirthOffset(0)
-, m_DeathOffset(0)
+, m_PopulationNext(0)
 , m_NextBirthDelay(0)
 , m_NextDeathDelay(0)
 , m_NextBirthCounter(0)
 , m_NextDeathCounter(0)
+, m_BirthOffset(0)
+, m_DeathOffset(0)
 , m_BirthLEDIntensity(0)
 , m_DeathLEDIntensity(0)
 {
@@ -405,7 +408,9 @@ float PopulationController::_GetPopulationAtDate(int32_t year)
         birthRate = br0 + (br1 - br0) * t;
       }
 
+#ifdef DEBUG
       Serial.println(String("P0: ") + int32_t(m_Population) + " BR: " + birthRate);
+#endif
 
       // Fetch year + 1
       {
@@ -433,7 +438,9 @@ float PopulationController::_GetPopulationAtDate(int32_t year)
         m_PopulationNext = pop0 + int64_t((pop1 - pop0) * t);
       }
 
+#ifdef DEBUG
       Serial.println(String("P1: ") + int32_t(m_PopulationNext) + " (" + int32_t(pop0) + ", " + int32_t(pop1) + ")");
+#endif
       return birthRate;
     }
   }
@@ -459,12 +466,16 @@ float PopulationController::_GetPopulationAtDate(int32_t year)
       {
         m_Population = popcount;
         birthRate = pgm_read_float_near(&kPopulationRecord[id0].birthRate);
+#ifdef DEBUG
         Serial.println(String("P0: ") + int32_t(popcount) + " BR: " + birthRate);
+#endif
         date += 1;
       }
       else if (popCountID == 1)
       {
+#ifdef DEBUG
         Serial.println(String("P1: ") + int32_t(popcount) + " (" + int32_t(pop0) + ", " + int32_t(pop1) + ")");
+#endif
         m_PopulationNext = popcount;
         return birthRate;
       }
@@ -482,7 +493,9 @@ float PopulationController::_GetPopulationAtDate(int32_t year)
 void  PopulationController::SetYear(int32_t year)
 {
   float birthRate = _GetPopulationAtDate(year);
+#ifdef DEBUG
   Serial.println(int32_t(m_Population));
+#endif
   int64_t yearlyDelta = m_PopulationNext - m_Population;
   int64_t yearlyMS = 365LL * 24LL * 3600LL * 1000LL;
 
@@ -500,20 +513,20 @@ void  PopulationController::SetYear(int32_t year)
   Serial.print(" , ");
   Serial.print(int32_t(m_PopulationNext));
   Serial.print("] | ");
-  Serial.print(int32_t(yearlyDeltaBirth));
+  Serial.print(float(yearlyDeltaBirth));
   Serial.print(" | ");
-  Serial.print(int32_t(yearlyDeltaDeath));
+  Serial.print(float(yearlyDeltaDeath));
 #endif  // DEBUG
 
   if (yearlyDeltaDeath < 0) // what. no deaths this year? Did I mess something up ?
   {
-    //Serial.println(" No deaths ?! : ");
+//    Serial.println(" No deaths ?! : ");
     yearlyDeltaBirth -= yearlyDeltaDeath;
     yearlyDeltaDeath = 0;
   }
 
-  m_NextBirthDelay = (yearlyDeltaBirth > 0) ? yearlyMS / yearlyDeltaBirth : 0;
-  m_NextDeathDelay = (yearlyDeltaDeath > 0) ? yearlyMS / yearlyDeltaDeath : 0;
+  m_NextBirthDelay = (yearlyDeltaBirth > 0) ? (yearlyMS / yearlyDeltaBirth) : 0;
+  m_NextDeathDelay = (yearlyDeltaDeath > 0) ? (yearlyMS / yearlyDeltaDeath) : 0;
 
   // Slightly stagger birth & death indicators to prevent them from flashing at the same time in ancient times
   m_NextBirthCounter = m_NextBirthDelay / 3;
@@ -528,9 +541,9 @@ void  PopulationController::SetYear(int32_t year)
   m_DeathOffset = 0;
 
 #ifdef DEBUG
-  Serial.print(" - ");
+  Serial.print(" | ");
   Serial.print(m_NextBirthDelay / 1000.0f);
-  Serial.print(" - ");
+  Serial.print(" | ");
   Serial.println(m_NextDeathDelay / 1000.0f);
 #endif  // DEBUG
 }

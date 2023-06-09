@@ -42,6 +42,8 @@ private:
   byte                m_SyncLevel;
 
   uint64_t            m_Population;
+
+  bool                m_SkipFrame;
   
   int                 m_TimeAcc[kMaxBPMSampleCount];
   int                 m_Countdown[kMaxBPMSampleCount];

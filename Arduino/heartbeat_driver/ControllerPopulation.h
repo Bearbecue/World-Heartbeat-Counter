@@ -27,14 +27,14 @@ private:
   int64_t             m_Population;
   int64_t             m_PopulationNext;
 
-  int32_t             m_BirthOffset;
-  int32_t             m_DeathOffset;
-
-  int32_t             m_NextBirthDelay;
-  int32_t             m_NextDeathDelay;
+  int64_t             m_NextBirthDelay;
+  int64_t             m_NextDeathDelay;
   
-  int32_t             m_NextBirthCounter;
-  int32_t             m_NextDeathCounter;
+  int64_t             m_NextBirthCounter;
+  int64_t             m_NextDeathCounter;
+
+  uint32_t            m_BirthOffset;
+  uint32_t            m_DeathOffset;
 
   int                 m_BirthLEDIntensity;
   int                 m_DeathLEDIntensity;

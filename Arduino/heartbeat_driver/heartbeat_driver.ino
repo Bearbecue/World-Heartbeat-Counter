@@ -16,6 +16,8 @@
 #include "ControllerHeartbeat.h"
 #include "PersistentMemory.h"
 
+//#define DEBUG
+
 //----------------------------------------------------------------------------
 
 LedControl  displayRails[] =
@@ -83,13 +85,19 @@ void setup()
   // We could do it more "smartly" and detect a magic-number or whatever.
   // Don't bother. This is hacked together anyway, I'm only making one or two of these :)
 
-  eeprom_write_state(0);
+  eeprom_write_state(1);
+
+  eeprom_write_date(0, 2100);   // Max year
+  eeprom_write_date(1, 2023);   // Current year
+  eeprom_write_date(2, 1961);   // First album of the beatles
+  eeprom_write_date(3, 1349);   // Black death
+  eeprom_write_date(4, 0);      // Jesus is born
+  eeprom_write_date(5, -1304);  // RamsesII is born
+  eeprom_write_date(6, -10406); // Start of agriculture
+  eeprom_write_date(7, -99986); // First homo sapiens is 14 and will have a kid this year
 
   for (int i = 0; i < 8; i++)
-  {
-    eeprom_write_date(i, 2023);
     eeprom_write_beats(i, SBigNum()); // clear
-  }
 #endif
 
   g_CurrentStateID = eeprom_read_state();
@@ -180,6 +188,7 @@ void loop()
   }
 #endif
 
+#ifdef DEBUG
   {
     static long int prevMS = millis();
     long int        curMS = millis();
@@ -199,6 +208,7 @@ void loop()
       prevMS = curMS;
     }
   }
+#endif
 
   SyncFrameTick(10);
 }
@@ -259,7 +269,9 @@ void  update_state(int dtMS)
     displayRails[kDispRail_Date].flushDeviceState();
 
     Serial.print("Current state: ");
-    Serial.println(g_CurrentStateID);
+    Serial.print(g_CurrentStateID);
+    Serial.print(", year: ");
+    Serial.println(currentDate.Year());
   }
 
   // If the state changed, start a countdown timer and write it to EEPROM after some time

@@ -265,6 +265,7 @@ void  HeartbeatController::_UpdateHiCount(SBigNum &newHBCount, int dtMS)
 void  HeartbeatController::Reset()
 {
   m_Counter = SBigNum(); // Reset count to zero !
+  m_SkipFrame = true;
 }
 
 //----------------------------------------------------------------------------
@@ -280,13 +281,11 @@ bool  HeartbeatController::Update(int dtMS)
     }
   }
 
+  // If the state-change / Reset button is currently pressed, don't update the counter
+  if (m_SkipFrame)
   {
-    static int  prevStateID = 0;
-    if (prevStateID != g_CurrentStateID)
-    {
-      prevStateID = g_CurrentStateID;
-      return true;
-    }
+    m_SkipFrame = false;
+    return true;
   }
 
   SBigNum newHBCount = m_Counter;
