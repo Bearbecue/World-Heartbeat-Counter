@@ -5,7 +5,7 @@ A big control wheel allows to change the current year, which updates the populat
 The current year can go from 100 000 BC (birth of the first homo-sapiens :) population count = 1), up to year 2100 AC.
 A green LED flashes whenever a new human is born, a red LED flashes whenever a human dies.
 
-![Front panel description](HowTo-en.png)
+![Front panel description](Images/HowTo-en.png)
 
 
 The hearbteat sync wheel allows to pseudo-synchronize the heartbeats of all humanity, it gives a nicer pulsating feel when watching the device, and turns it into a contemplative "clock" :)
@@ -23,7 +23,7 @@ https://ourworldindata.org/grapher/population
 https://en.m.wikipedia.org/wiki/World_population
 
 Curve of the actual population data used:
-![Population curve](data.png)
+![Population curve](Images/data.png)
 
 * Blue curve: Population, log scale on the left
 * Red curve: Birth coefficielt, scale on the right
