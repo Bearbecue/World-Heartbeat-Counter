@@ -1,5 +1,37 @@
 # World Heartbeat counter
+This is a heartbeat counter that "counts" (estimates) the heartbeats of humanity in realtime based on the population count and a distribution of BPMs that can be controlled independently.
+The population count cannot be set directly, instead it is based on the year.
+A big control wheel allows to change the current year, which updates the population count to match the population count of that year.
+The current year can go from 100 000 BC (birth of the first homo-sapiens :) population count = 1), up to year 2100 AC.
+A green LED flashes whenever a new human is born, a red LED flashes whenever a human dies.
 
+![Front panel description](HowTo-en.png)
+
+
+The hearbteat sync wheel allows to pseudo-synchronize the heartbeats of all humanity, it gives a nicer pulsating feel when watching the device, and turns it into a contemplative "clock" :)
+When unsynchronized, the counter increases uniformly over time.
+
+Demo of the machine running & cycling through the 8 recorded states, with heartbeats mostly synchronized:
+[![D2 Head sculpt teaser](https://img.youtube.com/vi/0Ew_5UpqQ8A/0.jpg)](https://www.youtube.com/watch?v=0Ew_5UpqQ8A)
+
+# Data & sources
+
+The population count is based on the actual data for the modern era, extrapolations for the future, and rough estimates for the ancient past. It includes some specific events in history such as the black death of 1347-1351. For sure it is missing a lot of historically-known interesting spikes and dips right now.
+
+Sources are based on:
+https://ourworldindata.org/grapher/population
+https://en.m.wikipedia.org/wiki/World_population
+
+Curve of the actual population data used:
+![Population curve](data.png)
+
+* Blue curve: Population, log scale on the left
+* Red curve: Birth coefficielt, scale on the right
+
+The graph used by the machine goes up to 100000 BC, but the curve above only displays down to 3000BC otherwise it's unreadable and not very interesting.
+
+
+# Rough notes & initial design ideas
 	7-seg display statistical counter of world heartbeats. Use pots to tune heartbeat distribution. Use pot to vary between synchronized and nonsynchronized.
 	Pots control height of bezier curve controlpoints? Or smooth curve that goes through the points.
 	Bargraph display of actual curve.
