@@ -14,6 +14,62 @@ When unsynchronized, the counter increases uniformly over time.
 Demo of the machine running & cycling through the 8 recorded states, with heartbeats mostly synchronized:
 [![D2 Head sculpt teaser](https://img.youtube.com/vi/0Ew_5UpqQ8A/0.jpg)](https://www.youtube.com/watch?v=0Ew_5UpqQ8A)
 
+
+# Displays
+
+1: Heartbeats
+20 digits, enough to count up to a hundred billion billion heartbeats, equivalent to 200 years of runtime with the current population at an average of 120 bpm, 300 years at an average of 80 bpm, and 400 years at an average of 60 bpm. Should be enough to not worry about maxing out the counter :)
+
+2: Population
+How many humans on earth at the selected date.
+
+3: Year
+... the year :) goes from -100 000 (which is estimated to be roughly the time at which the first homo sapiens appeared), up to 2100. It could go further but the confidence in the predictions becomes so low that I stopped it at 2100
+
+4: Population BPM distribution
+The left of the graph represents 30 BPM, the right of the graph 200 BPM. The spike on the above image is roughly at around60 BPM
+
+5: Births LED (green)
+Based on the birth estimates of the selected year. Like with the population, the more you go back in time, the more approximate it becomes. The general tendency seems to be a deceleration.
+Each flash = 1 birth on earth. Does not try to take into account annual variations such as seasons, flashes using the average birth frequency of the year.
+
+6: Deaths LED (red)
+Based on the birth estimates of the selected year and on the yearly population variation.
+Each flash = 1 death on earth. Like for the births LED, it uses the average frequency of the selected year.
+
+
+# Controls
+
+7: Heartbeat synchronization wheel
+When it's turned all the way to the left: No sync, it's the most "realistic" mode, every human has their heartbeats happening at different moments, the counter increases uniformly, constantly.
+When it's turned all the way to the right: The entire humanity has synchronized heartbeats. The microcontroller computes the dominant BPM in the BPM distribution curve, and everybody beats at this frequency, with a small random factor that slightly "spreads" the beats around the synchronization peak, and which for sufficiently large populations is basically similar to a gaussian distribution. It's the mode I feel is the most "contemplative", where you can visually see the wave of heartbeats propagating along the digits.
+Intermediate wheel positions make the behavior vary smoothly between both extremes.
+
+8: Year adjustment wheel
+Allows to change the current year, see "Known issues" down below for more details
+
+9: BPM distribution wheels
+Each wheel controls the height of one section of the BPM distribution curve, and to set a custom BPM distribution.
+
+10: Memory cycle switch
+The microcontroller records 8 different states, so it's possible to record 8 different dates & counter values.
+A short press on the switch displays the next state. Every time the state is changed, it records the previous state (year + counter, but not population, so when you go back on this state, the population resets to its initial value for the year. Not great, but I simply did not think about saving it)
+When you reach the last state, and you press again, it wraps around to the first state, etc...
+A press of more than 4 seconds resets the current counter to zero. It can't be undone (Unless you unplug the power and the 5 minutes auto-save did not happen yet, and the state wasn't changed by doing a short press on the button again)
+
+The goal to have multiple states was initially to be able to do a few presets at specific years, to see the difference in counting speeds at different times in history, while still keeping one whose goal is just to count as far as possible, if you keep the device plugged in permanently.
+However, only the currently displayed counter is advanced, the other 7 counters are paused in the background.
+
+
+# Known issues
+
+- When you keep population increase, normally after one year it should reach the population of the next year, BUT the year won't auto-increase, you will have to increase it by hand using the year selection wheel. It will update the population computed previously.
+
+- The BPM distribution display in the current only prototype (cf video) has a few bad contacts on some LED columns, I didn't manage to fully fix it :(
+
+- The year selection wheel is a bit crusty. When the year is close to our current date, the wheel goes through the years "slowly", when we arrive towards the middle-ages or BC, it goes faster, otherwise it's unmanageable to manually go to -10 000 or -100 000. I tried to detect in software when the turning rate gets slower, and to change the years more precisely, while fast turns would change the year much more quickly, but sometimes there are misses (I suspect maybe some crosstalk in the nightmare of wires on the inside of the case, in addition to a suspicious construction of this aliexpress wheel, in addition to not good-enough de-bouncing on the wheel pins.
+So, when you want to go to a specific year, it's often pretty annoying, you need to go slowly and gently when you get close to it. But sometimes if you go too slow it produces a huge bounce in years... anyway. If there was a major thing to improve it would be this wheel.
+
 # Data & sources
 
 The population count is based on the actual data for the modern era, extrapolations for the future, and rough estimates for the ancient past. It includes some specific events in history such as the black death of 1347-1351. For sure it is missing a lot of historically-known interesting spikes and dips right now.
@@ -26,9 +82,16 @@ Curve of the actual population data used:
 ![Population curve](Images/data.png)
 
 * Blue curve: Population, log scale on the left
-* Red curve: Birth coefficielt, scale on the right
+* Red curve: Birth coefficient, scale on the right
 
 The graph used by the machine goes up to 100000 BC, but the curve above only displays down to 3000BC otherwise it's unreadable and not very interesting.
+
+
+# Internals
+
+![Internal nightmare wiring](Images/Inner_Nightmare.jpg)
+
+![Internal contents](Images/Inner_Guts.jpg)
 
 
 # Rough notes & initial design ideas
